@@ -28,14 +28,19 @@ def last_50(progress, loop):
         time.sleep(.1)
 
 
-class MainWindow(QtGui.QWidget):
+class MainWindow(QtGui.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
-        self.progress = QtGui.QProgressBar(self)
-        self.progress.setRange(0, 99)
+
         self.setGeometry(300, 300, 250, 150)
         self.setWindowTitle('Agio')
-        self.show()
+
+        self.progress = QtGui.QProgressBar(self)
+        self.progress.setRange(0, 99)
+
+        btn = QtGui.QPushButton('Button', self)
+        btn.resize(btn.sizeHint())
+        btn.move(50, 50)
 
 
 def main():
@@ -43,8 +48,13 @@ def main():
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
     main_window = MainWindow()
+    main_window.show()
+    main_window.raise_()
     with loop:
-        loop.run_until_complete(master(main_window.progress))
+        try:
+            loop.run_until_complete(master(main_window.progress))
+        except RuntimeError:
+            sys.exit(0)
     sys.exit(app.exec_())
 
 if __name__ == '__main__':

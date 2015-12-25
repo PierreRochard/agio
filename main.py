@@ -1,21 +1,19 @@
 import asyncio
-import functools
 import sys
 import time
 import warnings
 
 import numpy as np
 from PyQt4 import QtGui, uic
-from quamash import QEventLoop, QThreadExecutor
+from quamash import QEventLoop
 from vispy import gloo, app
+import websockets
 
 
 @asyncio.coroutine
 def master(progress):
-    yield from first_50(progress)
-    loop = asyncio.get_event_loop()
-    with QThreadExecutor(1) as executor:
-        yield from loop.run_in_executor(executor, functools.partial(last_50, progress, loop))
+    coinbase_websocket = yield from websockets.connect("wss://ws-feed.exchange.coinbase.com")
+    yield from coinbase_websocket.send('{"type": "subscribe", "product_id": "BTC-USD"}')
 
 
 @asyncio.coroutine
@@ -38,11 +36,13 @@ with warnings.catch_warnings(record=True):
     class MainWindow(TemplateBaseClass):
         def __init__(self):
             TemplateBaseClass.__init__(self)
-
             self.ui = WindowTemplate()
             self.ui.setupUi(self)
             self.ui.progressBar.setRange(0, 99)
+            self.ui.progressBar.setValue(0)
             self.ui.canvas = MainCanvas(self.ui.canvas)
+            loop = asyncio.get_event_loop()
+            self.ui.start_button.clicked.connect(lambda: loop.run_until_complete(master(self.ui.progressBar)))
 
 
 class MainCanvas(app.Canvas):
@@ -77,18 +77,13 @@ class MainCanvas(app.Canvas):
 
 
 def main():
-    app = QtGui.QApplication(sys.argv)
-    loop = QEventLoop(app)
+    main_app = QtGui.QApplication(sys.argv)
+    loop = QEventLoop(main_app)
     asyncio.set_event_loop(loop)
     main_window = MainWindow()
     main_window.show()
     main_window.raise_()
-    with loop:
-        try:
-            loop.run_until_complete(master(main_window.ui.progressBar))
-        except RuntimeError:
-            sys.exit(0)
-    sys.exit(app.exec_())
+    sys.exit(main_app.exec_())
 
 
 if __name__ == '__main__':

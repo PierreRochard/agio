@@ -2,9 +2,12 @@ import asyncio
 import functools
 import sys
 import time
+import warnings
 
-from PyQt4 import QtGui
+import numpy as np
+from PyQt4 import QtGui, uic
 from quamash import QEventLoop, QThreadExecutor
+from vispy.scene import visuals
 
 
 @asyncio.coroutine
@@ -24,23 +27,21 @@ def first_50(progress):
 
 def last_50(progress, loop):
     for i in range(50, 100):
-        loop.call_soon_threadsafe(progress. setValue, i)
+        loop.call_soon_threadsafe(progress.setValue, i)
         time.sleep(.1)
 
+with warnings.catch_warnings(record=True):
+    WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
 
-class MainWindow(QtGui.QMainWindow):
-    def __init__(self):
-        super(MainWindow, self).__init__()
+    class MainWindow(TemplateBaseClass):
+        def __init__(self):
+            TemplateBaseClass.__init__(self)
 
-        self.setGeometry(300, 300, 250, 150)
-        self.setWindowTitle('Agio')
-
-        self.progress = QtGui.QProgressBar(self)
-        self.progress.setRange(0, 99)
-
-        btn = QtGui.QPushButton('Button', self)
-        btn.resize(btn.sizeHint())
-        btn.move(50, 50)
+            self.ui = WindowTemplate()
+            self.ui.setupUi(self)
+            self.ui.progressBar.setRange(0, 99)
+            data = np.linspace(0, 100)
+            visuals.LinePlot(data=data, parent=self.ui.canvas.scene)
 
 
 def main():
@@ -52,10 +53,11 @@ def main():
     main_window.raise_()
     with loop:
         try:
-            loop.run_until_complete(master(main_window.progress))
+            loop.run_until_complete(master(main_window.ui.progressBar))
         except RuntimeError:
             sys.exit(0)
     sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     main()

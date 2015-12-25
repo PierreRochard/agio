@@ -10,6 +10,8 @@ from PyQt4 import QtGui, uic
 from quamash import QEventLoop
 from vispy import gloo, app
 import websockets
+from vispy.plot import PlotWidget
+from vispy.scene import visuals, SceneCanvas
 
 
 @asyncio.coroutine
@@ -62,6 +64,17 @@ class MainCanvas(app.Canvas):
         self.program['a_position'] = np.c_[
             np.linspace(-1.0, +1.0, 1000),
             np.random.uniform(-0.5, +0.5, 1000)].astype(np.float32)
+        print(np.c_[
+            np.linspace(-1.0, +1.0, 1000),
+            np.random.uniform(-0.5, +0.5, 1000)].astype(np.float32))
+        self._timer = app.Timer('auto', connect=self.on_timer_event,
+                                start=True)
+
+    def on_timer_event(self, event):
+        self.program['a_position'] = np.c_[
+            np.linspace(-1.0, +1.0, 1000),
+            np.random.uniform(-0.5, +0.5, 1000)].astype(np.float32)
+        self.update()
         self.show()
 
     def on_resize(self, event):

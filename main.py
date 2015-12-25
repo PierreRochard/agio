@@ -1,4 +1,6 @@
 import asyncio
+import functools
+import json
 import sys
 import time
 import warnings
@@ -11,23 +13,14 @@ import websockets
 
 
 @asyncio.coroutine
-def master(progress):
+def master(main_window):
+    main_window.websocket = True
     coinbase_websocket = yield from websockets.connect("wss://ws-feed.exchange.coinbase.com")
     yield from coinbase_websocket.send('{"type": "subscribe", "product_id": "BTC-USD"}')
-
-
-@asyncio.coroutine
-def first_50(progress):
-    for i in range(50):
-        progress.setValue(i)
-        yield from asyncio.sleep(.01)
-
-
-def last_50(progress, loop):
-    for i in range(50, 100):
-        loop.call_soon_threadsafe(progress.setValue, i)
-        time.sleep(.01)
-
+    while main_window.websocket:
+        message = yield from coinbase_websocket.recv()
+        message = json.loads(message)
+        main_window.ui.sequence_label.setText('Sequence: {0}'.format(message['sequence']))
 
 with warnings.catch_warnings(record=True):
     WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
@@ -38,11 +31,14 @@ with warnings.catch_warnings(record=True):
             TemplateBaseClass.__init__(self)
             self.ui = WindowTemplate()
             self.ui.setupUi(self)
-            self.ui.progressBar.setRange(0, 99)
-            self.ui.progressBar.setValue(0)
             self.ui.canvas = MainCanvas(self.ui.canvas)
             loop = asyncio.get_event_loop()
-            self.ui.start_button.clicked.connect(lambda: loop.run_until_complete(master(self.ui.progressBar)))
+            self.websocket = False
+            self.ui.start_button.clicked.connect(lambda: loop.run_until_complete(master(self)))
+            self.ui.stop_button.clicked.connect(functools.partial(self.toggle_websocket, False))
+
+        def toggle_websocket(self, status):
+            self.websocket = status
 
 
 class MainCanvas(app.Canvas):

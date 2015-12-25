@@ -31,7 +31,7 @@
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="0">
-       <widget class="QtSceneCanvas" name="canvas" native="true">
+       <widget class="QWidget" name="canvas" native="true">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
           <horstretch>0</horstretch>
@@ -52,14 +52,6 @@
    </item>
   </layout>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>QtSceneCanvas</class>
-   <extends>QWidget</extends>
-   <header location="global">vispy.app.qt</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>

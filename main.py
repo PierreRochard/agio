@@ -9,11 +9,10 @@ import numpy as np
 import pytz
 import requests
 from PyQt4 import QtGui, uic
+from PyQt4.QtCore import QThread
 from PyQt4.QtGui import QListWidgetItem, QFont
 from dateutil.tz import tzlocal
-from quamash import QEventLoop, QtCore
 from vispy import gloo, app
-import websockets
 import websocket
 
 
@@ -30,7 +29,7 @@ import websocket
 #             main_window.ui.canvas.match_prices += [float(message['price'])]
 #             main_window.ui.canvas.match_dates += [datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ')]
 
-class ListenWebsocket(QtCore.QThread):
+class ListenWebsocket(QThread):
     def __init__(self, main_window=None):
         super(ListenWebsocket, self).__init__(main_window)
         self.main_window = main_window
@@ -79,9 +78,9 @@ with warnings.catch_warnings(record=True):
 
         def add_match(self, message):
             self.matches += [message]
-            size = '{0:.4f}'.format(float(message['size']))
+            size = '{0:.8f}'.format(float(message['size']))
             timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
-            while len(size) < 8:
+            while len(size) < 12:
                 size = ' ' + size
             item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']), timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
             item.setFont(QFont('Courier New'))
@@ -137,8 +136,6 @@ class MainCanvas(app.Canvas):
 
 def main():
     main_app = QtGui.QApplication(sys.argv)
-    loop = QEventLoop(main_app)
-    asyncio.set_event_loop(loop)
     main_window = MainWindow()
     main_window.show()
     main_window.raise_()

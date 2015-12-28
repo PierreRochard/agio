@@ -1,19 +1,55 @@
-import asyncio
+from datetime import datetime
 import functools
 import json
 import sys
 import warnings
-from datetime import datetime
 
+from dateutil.tz import tzlocal
 import numpy as np
 import pytz
-import requests
 from PyQt4 import QtGui, uic
-from PyQt4.QtCore import QThread
+from PyQt4.QtCore import QThread, SIGNAL
 from PyQt4.QtGui import QListWidgetItem, QFont
-from dateutil.tz import tzlocal
+import requests
 from vispy import gloo, app
 import websocket
+
+main_app = QtGui.QApplication(sys.argv)
+
+with warnings.catch_warnings(record=True):
+    WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
+
+    class MainWindow(TemplateBaseClass):
+        def __init__(self):
+            TemplateBaseClass.__init__(self)
+            self.ui = WindowTemplate()
+            self.ui.setupUi(self)
+            self.matches = []
+            print(self.matches)
+            self.ui.start_button.clicked.connect(functools.partial(self.start_websocket))
+            start_matches = requests.get('https://api.exchange.coinbase.com/products/BTC-USD/trades').json()
+            for message in reversed(start_matches):
+                self.add_match(message)
+            # self.ui.canvas = MainCanvas(self.ui.canvas, self)
+
+        def start_websocket(self):
+            thread = ListenWebsocket()
+            self.connect(thread, thread.match_signal, self.add_match)
+            self.connect(thread, thread.sequence_signal, self.update_sequence)
+            thread.start()
+
+        def add_match(self, message):
+            self.matches += [message]
+            size = '{0:.8f}'.format(float(message['size']))
+            timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+            while len(size) < 12:
+                size = ' ' + size
+            item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']), timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
+            item.setFont(QFont('Courier New'))
+            self.ui.matches_list.insertItem(-1, item)
+
+        def update_sequence(self, sequence):
+            self.ui.sequence_label.setText('Sequence: {0}'.format(sequence))
 
 
 # @asyncio.coroutine
@@ -30,9 +66,10 @@ import websocket
 #             main_window.ui.canvas.match_dates += [datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ')]
 
 class ListenWebsocket(QThread):
-    def __init__(self, main_window=None):
-        super(ListenWebsocket, self).__init__(main_window)
-        self.main_window = main_window
+    def __init__(self):
+        super(ListenWebsocket, self).__init__(main_app)
+        self.sequence_signal = SIGNAL("sequence_signal")
+        self.match_signal = SIGNAL("match_signal")
         self.WS = websocket.WebSocketApp("wss://ws-feed.exchange.coinbase.com",
                                          on_message=self.on_message,
                                          on_error=self.on_error,
@@ -40,7 +77,6 @@ class ListenWebsocket(QThread):
 
     def run(self):
         self.WS.on_open = self.on_open
-
         self.WS.run_forever()
 
     def on_open(self, ws):
@@ -48,43 +84,15 @@ class ListenWebsocket(QThread):
 
     def on_message(self, ws, message):
         message = json.loads(message)
-        self.main_window.ui.sequence_label.setText('Sequence: {0}'.format(message['sequence']))
+        self.emit(self.sequence_signal, message['sequence'])
         if message['type'] == 'match':
-            self.main_window.add_match(message)
+            self.emit(self.match_signal, message)
 
     def on_error(self, ws, error):
         print(error)
 
     def on_close(self, ws):
         return True
-
-
-with warnings.catch_warnings(record=True):
-    WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
-
-    class MainWindow(TemplateBaseClass):
-        def __init__(self):
-            TemplateBaseClass.__init__(self)
-            self.ui = WindowTemplate()
-            self.ui.setupUi(self)
-            self.thread = ListenWebsocket(self)
-            self.matches = []
-            print(self.matches)
-            self.ui.start_button.clicked.connect(functools.partial(self.thread.start))
-            start_matches = requests.get('https://api.exchange.coinbase.com/products/BTC-USD/trades').json()
-            for message in reversed(start_matches):
-                self.add_match(message)
-            # self.ui.canvas = MainCanvas(self.ui.canvas, self)
-
-        def add_match(self, message):
-            self.matches += [message]
-            size = '{0:.8f}'.format(float(message['size']))
-            timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
-            while len(size) < 12:
-                size = ' ' + size
-            item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']), timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
-            item.setFont(QFont('Courier New'))
-            self.ui.matches_list.insertItem(-1, item)
 
 
 class MainCanvas(app.Canvas):
@@ -135,7 +143,6 @@ class MainCanvas(app.Canvas):
 
 
 def main():
-    main_app = QtGui.QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
     main_window.raise_()

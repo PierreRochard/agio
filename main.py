@@ -206,7 +206,7 @@ class ListenWebsocket(QThread):
             self.emit(self.match_signal, message)
 
     def on_error(self, ws, error):
-        print('Error: ' + error)
+        print('Error: ' + str(error))
         self.emit(self.restart_signal)
         self.exit(0)
 

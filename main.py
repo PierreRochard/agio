@@ -35,6 +35,7 @@ with warnings.catch_warnings(record=True):
             self.matches = []
             self.start_websocket()
             self.get_recent_matches()
+            self.setup_matches_table()
             self.get_fills()
             self.get_open_orders()
             self.ui.refresh_fills.clicked.connect(self.get_fills)
@@ -42,7 +43,9 @@ with warnings.catch_warnings(record=True):
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
 
         def setup_matches_table(self):
-            self.ui.matches_table.setColumnCount
+            headers = ['Price', 'Size', 'Value', 'Time', 'Taker']
+            self.ui.matches_table.setColumnCount(len(headers))
+            self.ui.matches_table.setHorizontalHeaderLabels(headers)
 
         def get_recent_matches(self):
             request = QNetworkRequest()

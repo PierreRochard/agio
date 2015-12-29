@@ -84,9 +84,6 @@
      </layout>
     </widget>
    </item>
-   <item row="4" column="5">
-    <widget class="QListWidget" name="matches_list"/>
-   </item>
    <item row="4" column="4">
     <spacer name="verticalSpacer">
      <property name="orientation">
@@ -156,6 +153,9 @@
       <set>Qt::AlignCenter</set>
      </property>
     </widget>
+   </item>
+   <item row="4" column="5">
+    <widget class="QTableWidget" name="matches_table"/>
    </item>
   </layout>
  </widget>

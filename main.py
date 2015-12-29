@@ -41,6 +41,9 @@ with warnings.catch_warnings(record=True):
             self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
 
+        def setup_matches_table(self):
+            self.ui.matches_table.setColumnCount
+
         def get_recent_matches(self):
             request = QNetworkRequest()
             request.setUrl(QUrl('https://api.exchange.coinbase.com/products/BTC-USD/trades'))
@@ -69,6 +72,8 @@ with warnings.catch_warnings(record=True):
                 item.setBackgroundColor(QColor(0, 255, 0, alpha))
             item.setFont(QFont('Courier New'))
             self.ui.matches_list.insertItem(-1, item)
+
+
 
         def get_fills(self):
             request = QNetworkRequest()

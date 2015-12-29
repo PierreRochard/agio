@@ -36,7 +36,9 @@ with warnings.catch_warnings(record=True):
             self.start_websocket()
             self.get_recent_matches()
             self.get_fills()
+            self.get_open_orders()
             self.ui.refresh_fills.clicked.connect(self.get_fills)
+            self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
 
         def get_recent_matches(self):
@@ -108,6 +110,47 @@ with warnings.catch_warnings(record=True):
                 item.setBackgroundColor(QColor(0, 255, 0, alpha))
             item.setFont(QFont('Courier New'))
             self.ui.fills_list.insertItem(-1, item)
+
+        def get_open_orders(self):
+            request = QNetworkRequest()
+            url = 'https://api.exchange.coinbase.com/orders'
+            path_url = '/orders'
+            timestamp = str(time.time())
+            message = timestamp + 'GET' + path_url
+            message = message.encode('utf-8')
+            hmac_key = base64.b64decode(COINBASE_EXCHANGE_API_SECRET)
+            signature = hmac.new(hmac_key, message, hashlib.sha256)
+            signature_b64 = base64.b64encode(signature.digest())
+            request.setRawHeader('CB-ACCESS-SIGN', signature_b64)
+            request.setRawHeader('CB-ACCESS-TIMESTAMP', timestamp)
+            request.setRawHeader('CB-ACCESS-KEY', COINBASE_EXCHANGE_API_KEY)
+            request.setRawHeader('CB-ACCESS-PASSPHRASE', COINBASE_EXCHANGE_API_PASSPHRASE)
+            request.setUrl(QUrl(url))
+            response = self.manager.get(request)
+            response.finished.connect(self.process_open_orders)
+
+        def process_open_orders(self):
+            reply = self.sender()
+            raw = reply.readAll()
+            response = json.loads(raw.data().decode('utf-8'))
+            self.ui.open_orders_list.clear()
+            for order in response:
+                self.add_order(order)
+
+        def add_order(self, message):
+            size = '{0:.8f}'.format(float(message['size']))
+            timestamp = datetime.strptime(message['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+            while len(size) < 12:
+                size = ' ' + size
+            item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']),
+                                                            timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
+            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            if message['side'] == 'sell':
+                item.setBackgroundColor(QColor(255, 0, 0, alpha))
+            else:
+                item.setBackgroundColor(QColor(0, 255, 0, alpha))
+            item.setFont(QFont('Courier New'))
+            self.ui.open_orders_list.insertItem(-1, item)
 
         def start_websocket(self):
             thread = ListenWebsocket()

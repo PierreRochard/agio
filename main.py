@@ -9,12 +9,13 @@ import time
 import warnings
 from pprint import pformat
 
+from dateutil.parser import parse
 from dateutil.tz import tzlocal
 import numpy as np
 import pytz
 from PyQt4 import QtGui, uic
-from PyQt4.QtCore import QThread, SIGNAL, QUrl
-from PyQt4.QtGui import QListWidgetItem, QFont, QColor
+from PyQt4.QtCore import QThread, SIGNAL, QUrl, Qt
+from PyQt4.QtGui import QListWidgetItem, QFont, QColor, QTableWidgetItem
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from vispy import gloo, app
 import websocket
@@ -35,17 +36,11 @@ with warnings.catch_warnings(record=True):
             self.matches = []
             self.start_websocket()
             self.get_recent_matches()
-            self.setup_matches_table()
             self.get_fills()
             self.get_open_orders()
             self.ui.refresh_fills.clicked.connect(self.get_fills)
             self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
-
-        def setup_matches_table(self):
-            headers = ['Price', 'Size', 'Value', 'Time', 'Taker']
-            self.ui.matches_table.setColumnCount(len(headers))
-            self.ui.matches_table.setHorizontalHeaderLabels(headers)
 
         def get_recent_matches(self):
             request = QNetworkRequest()
@@ -61,24 +56,46 @@ with warnings.catch_warnings(record=True):
                 self.add_match(message)
 
         def add_match(self, message):
+            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
+            message['price'] = '{0:,.2f}'.format(float(message['price']))
+            message['size'] = '{0:,.4f}'.format(float(message['size']))
+            message['time'] = parse(message['time']).astimezone(tzlocal()).strftime('%H:%M:%S')
+            if message['side'] == 'sell':
+                message['color'] = QColor(255, 0, 0, alpha)
+            else:
+                message['color'] = QColor(0, 255, 0, alpha)
             self.matches += [message]
-            self.ui.matches_table.clearContents()
+            self.ui.matches_table.clear()
+            headers = ['Price', 'Size', 'Value', 'Time', 'Taker']
+            self.ui.matches_table.setColumnCount(len(headers))
+            self.ui.matches_table.setHorizontalHeaderLabels(headers)
             self.ui.matches_table.setSortingEnabled(False)
             self.ui.matches_table.setRowCount(len(self.matches))
+            for column_index, header in enumerate(headers):
+                for row_index, row in enumerate(self.matches):
+                    if header.lower() in row:
+                        item = QTableWidgetItem(row[header.lower()])
+                        item.setBackground(row['color'])
+                        item.setFlags(Qt.ItemIsEnabled)
+                        item.setTextAlignment(Qt.AlignRight)
+                        self.ui.matches_table.setItem(row_index, column_index, item)
+            self.ui.matches_table.resizeColumnsToContents()
 
-            size = '{0:.8f}'.format(float(message['size']))
-            timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
-            while len(size) < 12:
-                size = ' ' + size
-            item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']),
-                                                            timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
-            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
-            if message['side'] == 'sell':
-                item.setBackgroundColor(QColor(255, 0, 0, alpha))
-            else:
-                item.setBackgroundColor(QColor(0, 255, 0, alpha))
-            item.setFont(QFont('Courier New'))
-            self.ui.matches_list.insertItem(-1, item)
+            #
+            # size = '{0:.8f}'.format(float(message['size']))
+            # timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
+            # while len(size) < 12:
+            #     size = ' ' + size
+            # item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']),
+            #                                                 timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
+            # alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            # if message['side'] == 'sell':
+            #     item.setBackgroundColor(QColor(255, 0, 0, alpha))
+            # else:
+            #     item.setBackgroundColor(QColor(0, 255, 0, alpha))
+            # item.setFont(QFont('Courier New'))
+            # self.ui.matches_list.insertItem(-1, item)
 
 
 

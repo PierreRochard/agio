@@ -52,7 +52,7 @@ with warnings.catch_warnings(record=True):
             reply = self.sender()
             raw = reply.readAll()
             response = json.loads(raw.data().decode('utf-8'))
-            for message in response:
+            for message in reversed(response):
                 self.add_match(message)
 
         def add_match(self, message):
@@ -61,25 +61,24 @@ with warnings.catch_warnings(record=True):
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
             message['time'] = parse(message['time']).astimezone(tzlocal()).strftime('%H:%M:%S')
-            if message['side'] == 'sell':
+            if message['side'] == 'buy':
                 message['color'] = QColor(255, 0, 0, alpha)
             else:
                 message['color'] = QColor(0, 255, 0, alpha)
             self.matches += [message]
-            self.ui.matches_table.clear()
             headers = ['Price', 'Size', 'Value', 'Time', 'Taker']
             self.ui.matches_table.setColumnCount(len(headers))
             self.ui.matches_table.setHorizontalHeaderLabels(headers)
             self.ui.matches_table.setSortingEnabled(False)
-            self.ui.matches_table.setRowCount(len(self.matches))
+            # current_row_count = self.ui.matches_table.rowCount(
+            self.ui.matches_table.insertRow(0)
             for column_index, header in enumerate(headers):
-                for row_index, row in enumerate(self.matches):
-                    if header.lower() in row:
-                        item = QTableWidgetItem(row[header.lower()])
-                        item.setBackground(row['color'])
-                        item.setFlags(Qt.ItemIsEnabled)
-                        item.setTextAlignment(Qt.AlignRight)
-                        self.ui.matches_table.setItem(row_index, column_index, item)
+                if header.lower() in message:
+                    item = QTableWidgetItem(message[header.lower()])
+                    item.setBackground(message['color'])
+                    item.setFlags(Qt.ItemIsEnabled)
+                    item.setTextAlignment(Qt.AlignRight)
+                    self.ui.matches_table.setItem(0, column_index, item)
             self.ui.matches_table.resizeColumnsToContents()
 
             #

@@ -62,6 +62,10 @@ with warnings.catch_warnings(record=True):
 
         def add_match(self, message):
             self.matches += [message]
+            self.ui.matches_table.clearContents()
+            self.ui.matches_table.setSortingEnabled(False)
+            self.ui.matches_table.setRowCount(len(self.matches))
+
             size = '{0:.8f}'.format(float(message['size']))
             timestamp = datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
             while len(size) < 12:

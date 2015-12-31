@@ -66,15 +66,14 @@ with warnings.catch_warnings(record=True):
             else:
                 message['color'] = QColor(0, 255, 0, alpha)
             self.matches += [message]
-            headers = ['Price', 'Size', 'Value', 'Time', 'Taker']
+            headers = ['Price', 'Size', 'Value', 'Time', 'Taker Order ID']
             self.ui.matches_table.setColumnCount(len(headers))
             self.ui.matches_table.setHorizontalHeaderLabels(headers)
             self.ui.matches_table.setSortingEnabled(False)
-            # current_row_count = self.ui.matches_table.rowCount(
             self.ui.matches_table.insertRow(0)
             for column_index, header in enumerate(headers):
-                if header.lower() in message:
-                    item = QTableWidgetItem(message[header.lower()])
+                if header.replace(' ', '_').lower() in message:
+                    item = QTableWidgetItem(message[header.replace(' ', '_').lower()])
                     item.setBackground(message['color'])
                     item.setFlags(Qt.ItemIsEnabled)
                     item.setTextAlignment(Qt.AlignRight)

@@ -15,14 +15,25 @@ import numpy as np
 import pytz
 from PyQt4 import QtGui, uic
 from PyQt4.QtCore import QThread, SIGNAL, QUrl, Qt
-from PyQt4.QtGui import QListWidgetItem, QFont, QColor, QTableWidgetItem, QHeaderView, QTreeWidgetItem
+from PyQt4.QtGui import QColor, QTableWidgetItem, QHeaderView, QTreeWidgetItem
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from decimal import Decimal
 from vispy import gloo, app
 import websocket
 
 from config import COINBASE_EXCHANGE_API_KEY, COINBASE_EXCHANGE_API_SECRET, COINBASE_EXCHANGE_API_PASSPHRASE
 
 main_app = QtGui.QApplication(sys.argv)
+
+
+class LimitTreeWidgetItem(QTreeWidgetItem):
+    def __init__(self, parent=None, columns=[]):
+        QtGui.QTreeWidgetItem.__init__(self, parent, columns)
+
+    def __lt__(self, otherItem):
+        column = self.treeWidget().sortColumn()
+        return float(self.text(column)) < float(otherItem.text(column))
+
 
 with warnings.catch_warnings(record=True):
     WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
@@ -41,7 +52,7 @@ with warnings.catch_warnings(record=True):
             self.get_fills()
 
             self.ui.bid_tree.setColumnCount(2)
-            self.ui.bid_tree.setHeaderLabels(['Price/Ordesr', 'Size', 'Count'])
+            self.ui.bid_tree.setHeaderLabels(['Price', 'Order', 'Size', 'Count'])
             self.ui.bid_tree.setItemsExpandable(True)
             self.bid_tree = {}
             self.get_open_orders()
@@ -62,31 +73,39 @@ with warnings.catch_warnings(record=True):
             reply = self.sender()
             raw = reply.readAll()
             response = json.loads(raw.data().decode('utf-8'))
-            self.add_limit_order(response['bids'])
+            self.ui.bid_tree.setSortingEnabled(False)
+            for price, size, order_id in response['bids']:
+                limit_order = {'price': price, 'size': size, 'order_id': order_id}
+                self.add_limit_order(limit_order, 'bid')
+            self.ui.bid_tree.setSortingEnabled(True)
+            self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
 
-        def add_limit_order(self, side):
-            for price, size, order_id in side:
+        def add_limit_order(self, limit_order, side):
+            if side == 'bid':
+                price = limit_order['price']
+                order_id = limit_order['order_id']
+                size = limit_order['size']
                 parent_price = self.bid_tree.get(price)
                 if not parent_price:
                     self.bid_tree[price] = {}
-                    self.bid_tree[price]['parent'] = QTreeWidgetItem(self.ui.bid_tree, [price, size, '1'])
+                    self.bid_tree[price]['parent'] = LimitTreeWidgetItem(self.ui.bid_tree, [price, '', size, '1'])
                     self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
                     parent_price = self.bid_tree[price]
-                    QTreeWidgetItem(parent_price['parent'], [order_id, size])
+                    QTreeWidgetItem(parent_price['parent'], ['', order_id, size])
                 else:
                     del parent_price['parent']
                     self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
-                    orders = [float(self.bid_tree[price][order_id]['size'])
+                    orders = [Decimal(self.bid_tree[price][order_id]['size'])
                               for order_id in self.bid_tree[price]
                               if 'size' in self.bid_tree[price][order_id]]
                     cumulative_size = sum(orders)
                     count = len(orders)
-                    parent_price['parent'] = QTreeWidgetItem(self.ui.bid_tree,
-                                                             [price, str(cumulative_size), str(count)])
-                    [QTreeWidgetItem(parent_price['parent'], [self.bid_tree[price][order_id]['order_id'],
+                    parent_price['parent'] = LimitTreeWidgetItem(self.ui.bid_tree,
+                                                             [price, '', str(cumulative_size), str(count)])
+                    [QTreeWidgetItem(parent_price['parent'], ['', self.bid_tree[price][order_id]['order_id'],
                                                               self.bid_tree[price][order_id]['size']])
                      for order_id in self.bid_tree[price] if
-                     not isinstance(self.bid_tree[price][order_id], QTreeWidgetItem)]
+                     not isinstance(self.bid_tree[price][order_id], LimitTreeWidgetItem)]
 
         def get_recent_matches(self):
             request = QNetworkRequest()

@@ -36,9 +36,6 @@
       <item row="8" column="0">
        <widget class="QListWidget" name="open_orders_list"/>
       </item>
-      <item row="8" column="1">
-       <widget class="QListWidget" name="fills_list"/>
-      </item>
       <item row="6" column="1" rowspan="2">
        <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
@@ -80,6 +77,9 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item row="8" column="1">
+       <widget class="QTableWidget" name="fills_table"/>
       </item>
      </layout>
     </widget>

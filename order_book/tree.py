@@ -25,7 +25,7 @@ class Tree(object):
             del self.received_orders[order_id]
         if price not in self.price_map:
             self.create_price(price)
-        order = {'order_id': order_id, 'size': size, 'price': price, 'price_map': self.price_map[price]}
+        order = {'order_id': order_id, 'size': size, 'price': price}
         self.price_map[price].append(order)
         self.order_map[order_id] = order
 

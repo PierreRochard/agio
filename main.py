@@ -1,6 +1,8 @@
 import base64
 import hashlib
 import hmac
+from collections import OrderedDict
+from copy import deepcopy
 from datetime import datetime
 import json
 import math
@@ -14,7 +16,7 @@ from dateutil.tz import tzlocal
 import numpy as np
 import pytz
 from PyQt4 import QtGui, uic
-from PyQt4.QtCore import QThread, SIGNAL, QUrl, Qt
+from PyQt4.QtCore import QThread, SIGNAL, QUrl, Qt, QTimer, QObject
 from PyQt4.QtGui import QColor, QTableWidgetItem, QHeaderView, QTreeWidgetItem
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from decimal import Decimal
@@ -62,6 +64,20 @@ with warnings.catch_warnings(record=True):
             self.ui.refresh_fills.clicked.connect(self.get_fills)
             self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
+            self.timer = QTimer()
+            self.connect(self.timer, SIGNAL("timeout()"), self.refresh_order_book)
+            self.timer.start(500)
+
+        def refresh_order_book(self):
+            prices = sorted(self.order_book.bids.price_map.keys(), reverse=True)[:100]
+            self.ui.bid_tree.setSortingEnabled(False)
+            self.ui.bid_tree.clear()
+            self.bid_tree = {}
+            for price in prices:
+                for order in self.order_book.bids.price_map[price]:
+                    self.add_limit_order(order, 'bid')
+            self.ui.bid_tree.setSortingEnabled(True)
+            self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
 
         def get_order_book(self):
             request = QNetworkRequest()
@@ -80,18 +96,16 @@ with warnings.catch_warnings(record=True):
             [self.order_book.asks.insert_order(ask[2], Decimal(ask[1]), Decimal(ask[0]), initial=True) for ask in response['asks']]
             self.order_book.level3_sequence = response['sequence']
 
-            self.ui.bid_tree.setSortingEnabled(False)
-            for price, size, order_id in response['bids']:
-                if Decimal(price) > self.order_book.bids.price_tree.max_key() * Decimal('0.96'):
-                    limit_order = {'price': price, 'size': size, 'order_id': order_id}
-                    self.add_limit_order(limit_order, 'bid')
-            self.ui.bid_tree.setSortingEnabled(True)
-            self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
+        def process_message(self, message):
+            try:
+                self.order_book.process_message(message)
+            except KeyError:
+                pass
 
         def add_limit_order(self, limit_order, side):
             if side == 'bid':
                 price = '{0:,.2f}'.format(float(limit_order['price']))
-                size = limit_order['size']
+                size = str(limit_order['size'])
                 value = '{0:,.2f}'.format((round(Decimal(size) * Decimal(price), 2)))
                 order_id = limit_order['order_id']
                 parent_price = self.bid_tree.get(price)
@@ -127,7 +141,7 @@ with warnings.catch_warnings(record=True):
                             for column in range(0, 6):
                                 new_item.setBackgroundColor(column, QColor(0, 255, 0, alpha))
                     alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
-                    for column in range(0, 4):
+                    for column in range(0, 6):
                         self.bid_tree[price]['parent'].setBackgroundColor(column, QColor(0, 255, 0, alpha))
 
         def get_recent_matches(self):
@@ -148,7 +162,10 @@ with warnings.catch_warnings(record=True):
             message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
-            message['time'] = parse(message['time']).astimezone(tzlocal()).strftime('%H:%M:%S')
+            try:
+                message['time'] = message['time'].astimezone(tzlocal()).strftime('%H:%M:%S')
+            except AttributeError:
+                message['time'] = parse(message['time']).astimezone(tzlocal()).strftime('%H:%M:%S')
             if message['side'] == 'buy':
                 message['color'] = QColor(255, 0, 0, alpha)
             else:
@@ -273,6 +290,7 @@ with warnings.catch_warnings(record=True):
         def start_websocket(self):
             thread = ListenWebsocket()
             self.connect(thread, thread.match_signal, self.add_match)
+            self.connect(thread, thread.message_signal, self.process_message)
             self.connect(thread, thread.sequence_signal, self.update_sequence)
             self.connect(thread, thread.restart_signal, self.start_websocket)
             thread.start()
@@ -300,6 +318,7 @@ class ListenWebsocket(QThread):
         self.sequence_signal = SIGNAL('sequence_signal')
         self.match_signal = SIGNAL('match_signal')
         self.restart_signal = SIGNAL('restart_signal')
+        self.message_signal = SIGNAL('message_signal')
         self.WS = websocket.WebSocketApp('wss://ws-feed.exchange.coinbase.com',
                                          on_message=self.on_message,
                                          on_error=self.on_error,
@@ -318,6 +337,7 @@ class ListenWebsocket(QThread):
             self.emit(self.restart_signal)
             self.exit(0)
         message = json.loads(message)
+        self.emit(self.message_signal, message)
         self.emit(self.sequence_signal, message['sequence'])
         if message['type'] == 'match':
             self.emit(self.match_signal, message)

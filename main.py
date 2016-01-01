@@ -22,6 +22,7 @@ from vispy import gloo, app
 import websocket
 
 from config import COINBASE_EXCHANGE_API_KEY, COINBASE_EXCHANGE_API_SECRET, COINBASE_EXCHANGE_API_PASSPHRASE
+from order_book.book import Book
 
 main_app = QtGui.QApplication(sys.argv)
 
@@ -42,6 +43,7 @@ with warnings.catch_warnings(record=True):
     class MainWindow(TemplateBaseClass):
         def __init__(self):
             TemplateBaseClass.__init__(self)
+            self.order_book = Book()
             self.manager = QNetworkAccessManager(self)
             self.ui = WindowTemplate()
             self.ui.setupUi(self)
@@ -52,7 +54,7 @@ with warnings.catch_warnings(record=True):
             self.get_fills()
 
             self.ui.bid_tree.setColumnCount(2)
-            self.ui.bid_tree.setHeaderLabels(['Price', 'Order', 'Size', 'Count'])
+            self.ui.bid_tree.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
             self.ui.bid_tree.setItemsExpandable(True)
             self.bid_tree = {}
             self.get_open_orders()
@@ -73,39 +75,60 @@ with warnings.catch_warnings(record=True):
             reply = self.sender()
             raw = reply.readAll()
             response = json.loads(raw.data().decode('utf-8'))
+
+            [self.order_book.bids.insert_order(bid[2], Decimal(bid[1]), Decimal(bid[0]), initial=True) for bid in response['bids']]
+            [self.order_book.asks.insert_order(ask[2], Decimal(ask[1]), Decimal(ask[0]), initial=True) for ask in response['asks']]
+            self.order_book.level3_sequence = response['sequence']
+
             self.ui.bid_tree.setSortingEnabled(False)
             for price, size, order_id in response['bids']:
-                limit_order = {'price': price, 'size': size, 'order_id': order_id}
-                self.add_limit_order(limit_order, 'bid')
+                if Decimal(price) > self.order_book.bids.price_tree.max_key() * Decimal('0.96'):
+                    limit_order = {'price': price, 'size': size, 'order_id': order_id}
+                    self.add_limit_order(limit_order, 'bid')
             self.ui.bid_tree.setSortingEnabled(True)
             self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
 
         def add_limit_order(self, limit_order, side):
             if side == 'bid':
-                price = limit_order['price']
-                order_id = limit_order['order_id']
+                price = '{0:,.2f}'.format(float(limit_order['price']))
                 size = limit_order['size']
+                value = '{0:,.2f}'.format((round(Decimal(size) * Decimal(price), 2)))
+                order_id = limit_order['order_id']
                 parent_price = self.bid_tree.get(price)
+
                 if not parent_price:
                     self.bid_tree[price] = {}
-                    self.bid_tree[price]['parent'] = LimitTreeWidgetItem(self.ui.bid_tree, [price, '', size, '1'])
-                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
-                    parent_price = self.bid_tree[price]
-                    QTreeWidgetItem(parent_price['parent'], ['', order_id, size])
+                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
+                    self.bid_tree[price]['parent'] = LimitTreeWidgetItem(self.ui.bid_tree, [price, size, value, '', order_id])
+                    alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
+                    for column in range(0, 6):
+                        self.bid_tree[price]['parent'].setBackgroundColor(column, QColor(0, 255, 0, alpha))
                 else:
+                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
+                    self.ui.bid_tree.takeTopLevelItem((self.ui.bid_tree.indexOfTopLevelItem(parent_price['parent'])))
                     del parent_price['parent']
-                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
                     orders = [Decimal(self.bid_tree[price][order_id]['size'])
                               for order_id in self.bid_tree[price]
                               if 'size' in self.bid_tree[price][order_id]]
                     cumulative_size = sum(orders)
+                    cumulative_value = '{0:,.2f}'.format(round(cumulative_size * Decimal(price), 2))
                     count = len(orders)
                     parent_price['parent'] = LimitTreeWidgetItem(self.ui.bid_tree,
-                                                             [price, '', str(cumulative_size), str(count)])
-                    [QTreeWidgetItem(parent_price['parent'], ['', self.bid_tree[price][order_id]['order_id'],
-                                                              self.bid_tree[price][order_id]['size']])
-                     for order_id in self.bid_tree[price] if
-                     not isinstance(self.bid_tree[price][order_id], LimitTreeWidgetItem)]
+                                                                 [price, str(cumulative_size), cumulative_value, str(count), ''])
+                    for order_id in self.bid_tree[price]:
+                        if not isinstance(self.bid_tree[price][order_id], LimitTreeWidgetItem):
+                            alpha = min(255, int(20.0 * math.sqrt(float(self.bid_tree[price][order_id]['size']))) + 20)
+                            new_item = QTreeWidgetItem(parent_price['parent'],
+                                                       ['',
+                                                        self.bid_tree[price][order_id]['size'],
+                                                        self.bid_tree[price][order_id]['value'],
+                                                        '',
+                                                        self.bid_tree[price][order_id]['order_id']])
+                            for column in range(0, 6):
+                                new_item.setBackgroundColor(column, QColor(0, 255, 0, alpha))
+                    alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
+                    for column in range(0, 4):
+                        self.bid_tree[price]['parent'].setBackgroundColor(column, QColor(0, 255, 0, alpha))
 
         def get_recent_matches(self):
             request = QNetworkRequest()

@@ -76,11 +76,9 @@ with warnings.catch_warnings(record=True):
                     item = QTableWidgetItem(message[header.replace(' ', '_').lower()])
                     item.setBackground(message['color'])
                     item.setFlags(Qt.ItemIsEnabled)
-                    item.setTextAlignment(Qt.AlignRight)
-                    item.setFont(QFont('Courier New'))
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignRight)
                     self.ui.matches_table.setItem(0, column_index, item)
-            header = self.ui.matches_table.horizontalHeader()
-            header.setResizeMode(QHeaderView.Stretch)
+            self.ui.matches_table.horizontalHeader().setResizeMode(QtGui.QHeaderView.ResizeToContents)
 
         def get_fills(self):
             request = QNetworkRequest()
@@ -112,7 +110,7 @@ with warnings.catch_warnings(record=True):
             message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
-            message['time'] = parse(message['created_at']).astimezone(tzlocal()).strftime('%H:%M:%S')
+            message['time'] = parse(message['created_at']).astimezone(tzlocal()).strftime('%m-%d %H:%M:%S')
             if message['side'] == 'sell':
                 message['color'] = QColor(255, 0, 0, alpha)
             else:
@@ -128,11 +126,10 @@ with warnings.catch_warnings(record=True):
                     item = QTableWidgetItem(message[header.replace(' ', '_').lower()])
                     item.setBackground(message['color'])
                     item.setFlags(Qt.ItemIsEnabled)
-                    item.setTextAlignment(Qt.AlignRight)
-                    item.setFont(QFont('Courier New'))
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignRight)
                     self.ui.fills_table.setItem(0, column_index, item)
             header = self.ui.fills_table.horizontalHeader()
-            header.setResizeMode(QHeaderView.Stretch)
+            header.setResizeMode(QHeaderView.ResizeToContents)
 
         def get_open_orders(self):
             request = QNetworkRequest()
@@ -156,24 +153,34 @@ with warnings.catch_warnings(record=True):
             reply = self.sender()
             raw = reply.readAll()
             response = json.loads(raw.data().decode('utf-8'))
-            self.ui.open_orders_list.clear()
             for order in response:
                 self.add_order(order)
 
         def add_order(self, message):
-            size = '{0:.8f}'.format(float(message['size']))
-            timestamp = datetime.strptime(message['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=pytz.UTC)
-            while len(size) < 12:
-                size = ' ' + size
-            item = QListWidgetItem('{0} {1:.2f} {2}'.format(size, float(message['price']),
-                                                            timestamp.astimezone(tzlocal()).strftime('%H:%M:%S.%f')))
             alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
+            message['price'] = '{0:,.2f}'.format(float(message['price']))
+            message['size'] = '{0:,.4f}'.format(float(message['size']))
+            message['time'] = parse(message['created_at']).astimezone(tzlocal()).strftime('%m-%d %H:%M:%S')
             if message['side'] == 'sell':
-                item.setBackgroundColor(QColor(255, 0, 0, alpha))
+                message['color'] = QColor(255, 0, 0, alpha)
             else:
-                item.setBackgroundColor(QColor(0, 255, 0, alpha))
-            item.setFont(QFont('Courier New'))
-            self.ui.open_orders_list.insertItem(-1, item)
+                message['color'] = QColor(0, 255, 0, alpha)
+            self.matches += [message]
+            headers = ['Price', 'Size', 'Value', 'Time']
+            self.ui.open_orders_table.setColumnCount(len(headers))
+            self.ui.open_orders_table.setHorizontalHeaderLabels(headers)
+            self.ui.open_orders_table.setSortingEnabled(False)
+            self.ui.open_orders_table.insertRow(0)
+            for column_index, header in enumerate(headers):
+                if header.replace(' ', '_').lower() in message:
+                    item = QTableWidgetItem(message[header.replace(' ', '_').lower()])
+                    item.setBackground(message['color'])
+                    item.setFlags(Qt.ItemIsEnabled)
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignRight)
+                    self.ui.open_orders_table.setItem(0, column_index, item)
+            header = self.ui.open_orders_table.horizontalHeader()
+            header.setResizeMode(QHeaderView.ResizeToContents)
 
         def start_websocket(self):
             thread = ListenWebsocket()

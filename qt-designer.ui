@@ -23,6 +23,30 @@
       <enum>QFrame::Raised</enum>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
+      <item row="6" column="0" rowspan="2">
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <item>
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Open Orders</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="refresh_open_orders">
+          <property name="text">
+           <string>Refresh</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="9" column="1">
+       <widget class="QTableWidget" name="fills_table"/>
+      </item>
       <item row="1" column="0" colspan="2">
        <widget class="QtSceneCanvas" name="canvas" native="true">
         <property name="sizePolicy">
@@ -32,9 +56,6 @@
          </sizepolicy>
         </property>
        </widget>
-      </item>
-      <item row="8" column="0">
-       <widget class="QListWidget" name="open_orders_list"/>
       </item>
       <item row="6" column="1" rowspan="2">
        <layout class="QHBoxLayout" name="horizontalLayout">
@@ -57,29 +78,8 @@
         </item>
        </layout>
       </item>
-      <item row="6" column="0" rowspan="2">
-       <layout class="QHBoxLayout" name="horizontalLayout_3">
-        <item>
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>Open Orders</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="refresh_open_orders">
-          <property name="text">
-           <string>Refresh</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item row="8" column="1">
-       <widget class="QTableWidget" name="fills_table"/>
+      <item row="9" column="0">
+       <widget class="QTableWidget" name="open_orders_table"/>
       </item>
      </layout>
     </widget>

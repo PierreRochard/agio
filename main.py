@@ -15,7 +15,7 @@ import numpy as np
 import pytz
 from PyQt4 import QtGui, uic
 from PyQt4.QtCore import QThread, SIGNAL, QUrl, Qt
-from PyQt4.QtGui import QListWidgetItem, QFont, QColor, QTableWidgetItem, QHeaderView
+from PyQt4.QtGui import QListWidgetItem, QFont, QColor, QTableWidgetItem, QHeaderView, QTreeWidgetItem
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from vispy import gloo, app
 import websocket
@@ -27,6 +27,7 @@ main_app = QtGui.QApplication(sys.argv)
 with warnings.catch_warnings(record=True):
     WindowTemplate, TemplateBaseClass = uic.loadUiType('qt-designer.ui')
 
+
     class MainWindow(TemplateBaseClass):
         def __init__(self):
             TemplateBaseClass.__init__(self)
@@ -34,13 +35,58 @@ with warnings.catch_warnings(record=True):
             self.ui = WindowTemplate()
             self.ui.setupUi(self)
             self.matches = []
+            self.get_order_book()
             self.start_websocket()
             self.get_recent_matches()
             self.get_fills()
+
+            self.ui.bid_tree.setColumnCount(2)
+            self.ui.bid_tree.setHeaderLabels(['Price/Ordesr', 'Size', 'Count'])
+            self.ui.bid_tree.setItemsExpandable(True)
+            self.bid_tree = {}
             self.get_open_orders()
+
             self.ui.refresh_fills.clicked.connect(self.get_fills)
             self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
+
+        def get_order_book(self):
+            request = QNetworkRequest()
+            url = QUrl('https://api.exchange.coinbase.com/products/BTC-USD/book')
+            url.addQueryItem('level', '3')
+            request.setUrl(url)
+            response = self.manager.get(request)
+            response.finished.connect(self.process_order_book)
+
+        def process_order_book(self):
+            reply = self.sender()
+            raw = reply.readAll()
+            response = json.loads(raw.data().decode('utf-8'))
+            self.add_limit_order(response['bids'])
+
+        def add_limit_order(self, side):
+            for price, size, order_id in side:
+                parent_price = self.bid_tree.get(price)
+                if not parent_price:
+                    self.bid_tree[price] = {}
+                    self.bid_tree[price]['parent'] = QTreeWidgetItem(self.ui.bid_tree, [price, size, '1'])
+                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
+                    parent_price = self.bid_tree[price]
+                    QTreeWidgetItem(parent_price['parent'], [order_id, size])
+                else:
+                    del parent_price['parent']
+                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'order_id': order_id}
+                    orders = [float(self.bid_tree[price][order_id]['size'])
+                              for order_id in self.bid_tree[price]
+                              if 'size' in self.bid_tree[price][order_id]]
+                    cumulative_size = sum(orders)
+                    count = len(orders)
+                    parent_price['parent'] = QTreeWidgetItem(self.ui.bid_tree,
+                                                             [price, str(cumulative_size), str(count)])
+                    [QTreeWidgetItem(parent_price['parent'], [self.bid_tree[price][order_id]['order_id'],
+                                                              self.bid_tree[price][order_id]['size']])
+                     for order_id in self.bid_tree[price] if
+                     not isinstance(self.bid_tree[price][order_id], QTreeWidgetItem)]
 
         def get_recent_matches(self):
             request = QNetworkRequest()
@@ -56,7 +102,7 @@ with warnings.catch_warnings(record=True):
                 self.add_match(message)
 
         def add_match(self, message):
-            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            alpha = min(255, int(20.0 * math.sqrt(float(message['size']))) + 20)
             message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
@@ -106,7 +152,7 @@ with warnings.catch_warnings(record=True):
                 self.add_fill(fill)
 
         def add_fill(self, message):
-            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            alpha = min(255, int(20.0 * math.sqrt(float(message['size']))) + 20)
             message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
@@ -157,7 +203,7 @@ with warnings.catch_warnings(record=True):
                 self.add_order(order)
 
         def add_order(self, message):
-            alpha = min(255, int(20.0*math.sqrt(float(message['size'])))+20)
+            alpha = min(255, int(20.0 * math.sqrt(float(message['size']))) + 20)
             message['value'] = '{0:,.2f}'.format(float(message['price']) * float(message['size']))
             message['price'] = '{0:,.2f}'.format(float(message['price']))
             message['size'] = '{0:,.4f}'.format(float(message['size']))
@@ -191,7 +237,6 @@ with warnings.catch_warnings(record=True):
 
         def update_sequence(self, sequence):
             self.ui.sequence_label.setText('Sequence: {0}'.format(sequence))
-
 
 
 # @asyncio.coroutine

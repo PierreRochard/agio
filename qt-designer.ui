@@ -113,7 +113,13 @@
    <item row="4" column="0">
     <layout class="QVBoxLayout" name="verticalLayout">
      <item>
-      <widget class="QListWidget" name="listWidget_2"/>
+      <widget class="QTreeWidget" name="ask_tree">
+       <column>
+        <property name="text">
+         <string notr="true">1</string>
+        </property>
+       </column>
+      </widget>
      </item>
      <item>
       <widget class="QLabel" name="label_4">
@@ -126,7 +132,13 @@
       </widget>
      </item>
      <item>
-      <widget class="QListWidget" name="listWidget"/>
+      <widget class="QTreeWidget" name="bid_tree">
+       <column>
+        <property name="text">
+         <string notr="true">1</string>
+        </property>
+       </column>
+      </widget>
      </item>
     </layout>
    </item>

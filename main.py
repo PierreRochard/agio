@@ -58,7 +58,11 @@ with warnings.catch_warnings(record=True):
             self.ui.bid_tree.setColumnCount(2)
             self.ui.bid_tree.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
             self.ui.bid_tree.setItemsExpandable(True)
+            self.ui.ask_tree.setColumnCount(2)
+            self.ui.ask_tree.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
+            self.ui.ask_tree.setItemsExpandable(True)
             self.bid_tree = {}
+            self.ask_tree = {}
             self.get_open_orders()
 
             self.ui.refresh_fills.clicked.connect(self.get_fills)
@@ -66,18 +70,33 @@ with warnings.catch_warnings(record=True):
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
             self.timer = QTimer()
             self.connect(self.timer, SIGNAL("timeout()"), self.refresh_order_book)
-            self.timer.start(500)
+            self.timer.start(200)
 
         def refresh_order_book(self):
-            prices = sorted(self.order_book.bids.price_map.keys(), reverse=True)[:100]
+            bid_prices = sorted(self.order_book.bids.price_map.keys(), reverse=True)[:50]
             self.ui.bid_tree.setSortingEnabled(False)
             self.ui.bid_tree.clear()
             self.bid_tree = {}
-            for price in prices:
-                for order in self.order_book.bids.price_map[price]:
+            for bid_price in bid_prices:
+                for order in self.order_book.bids.price_map[bid_price]:
                     self.add_limit_order(order, 'bid')
             self.ui.bid_tree.setSortingEnabled(True)
             self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
+
+            ask_prices = sorted(self.order_book.asks.price_map.keys())[:50]
+            self.ui.ask_tree.setSortingEnabled(False)
+            self.ui.ask_tree.clear()
+            self.ask_tree = {}
+            for ask_price in ask_prices:
+                for order in self.order_book.asks.price_map[ask_price]:
+                    self.add_limit_order(order, 'ask')
+            self.ui.ask_tree.setSortingEnabled(True)
+            self.ui.ask_tree.sortItems(0, Qt.DescendingOrder)
+            self.ui.ask_tree.verticalScrollBar().setValue(self.ui.ask_tree.verticalScrollBar().maximum())
+
+            self.ui.spread_label.setText('Spread: {0:,.2f}'.format(self.order_book.asks.price_tree.min_key() -
+                                                                   self.order_book.bids.price_tree.max_key()))
+
 
         def get_order_book(self):
             request = QNetworkRequest()
@@ -104,45 +123,55 @@ with warnings.catch_warnings(record=True):
 
         def add_limit_order(self, limit_order, side):
             if side == 'bid':
-                price = '{0:,.2f}'.format(float(limit_order['price']))
-                size = str(limit_order['size'])
-                value = '{0:,.2f}'.format((round(Decimal(size) * Decimal(price), 2)))
-                order_id = limit_order['order_id']
-                parent_price = self.bid_tree.get(price)
+                tree = self.bid_tree
+                ui_tree = self.ui.bid_tree
+                red = 0
+                green = 255
+            else:
+                tree = self.ask_tree
+                ui_tree = self.ui.ask_tree
+                red = 255
+                green = 0
 
-                if not parent_price:
-                    self.bid_tree[price] = {}
-                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
-                    self.bid_tree[price]['parent'] = LimitTreeWidgetItem(self.ui.bid_tree, [price, size, value, '', order_id])
-                    alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
-                    for column in range(0, 6):
-                        self.bid_tree[price]['parent'].setBackgroundColor(column, QColor(0, 255, 0, alpha))
-                else:
-                    self.bid_tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
-                    self.ui.bid_tree.takeTopLevelItem((self.ui.bid_tree.indexOfTopLevelItem(parent_price['parent'])))
-                    del parent_price['parent']
-                    orders = [Decimal(self.bid_tree[price][order_id]['size'])
-                              for order_id in self.bid_tree[price]
-                              if 'size' in self.bid_tree[price][order_id]]
-                    cumulative_size = sum(orders)
-                    cumulative_value = '{0:,.2f}'.format(round(cumulative_size * Decimal(price), 2))
-                    count = len(orders)
-                    parent_price['parent'] = LimitTreeWidgetItem(self.ui.bid_tree,
-                                                                 [price, str(cumulative_size), cumulative_value, str(count), ''])
-                    for order_id in self.bid_tree[price]:
-                        if not isinstance(self.bid_tree[price][order_id], LimitTreeWidgetItem):
-                            alpha = min(255, int(20.0 * math.sqrt(float(self.bid_tree[price][order_id]['size']))) + 20)
-                            new_item = QTreeWidgetItem(parent_price['parent'],
-                                                       ['',
-                                                        self.bid_tree[price][order_id]['size'],
-                                                        self.bid_tree[price][order_id]['value'],
-                                                        '',
-                                                        self.bid_tree[price][order_id]['order_id']])
-                            for column in range(0, 6):
-                                new_item.setBackgroundColor(column, QColor(0, 255, 0, alpha))
-                    alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
-                    for column in range(0, 6):
-                        self.bid_tree[price]['parent'].setBackgroundColor(column, QColor(0, 255, 0, alpha))
+            price = '{0:,.2f}'.format(float(limit_order['price']))
+            size = str(limit_order['size'])
+            value = '{0:,.2f}'.format((round(Decimal(size) * Decimal(price), 2)))
+            order_id = limit_order['order_id']
+            parent_price = tree.get(price)
+
+            if not parent_price:
+                tree[price] = {}
+                tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
+                tree[price]['parent'] = LimitTreeWidgetItem(ui_tree, [price, size, value, '', order_id])
+                alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
+                for column in range(0, 6):
+                    tree[price]['parent'].setBackgroundColor(column, QColor(red, green, 0, alpha))
+            else:
+                tree[price][order_id] = {'price': price, 'size': size, 'value': value, 'order_id': order_id}
+                ui_tree.takeTopLevelItem((ui_tree.indexOfTopLevelItem(parent_price['parent'])))
+                del parent_price['parent']
+                orders = [Decimal(tree[price][order_id]['size'])
+                          for order_id in tree[price]
+                          if 'size' in tree[price][order_id]]
+                cumulative_size = sum(orders)
+                cumulative_value = '{0:,.2f}'.format(round(cumulative_size * Decimal(price), 2))
+                count = len(orders)
+                parent_price['parent'] = LimitTreeWidgetItem(ui_tree,
+                                                             [price, str(cumulative_size), cumulative_value, str(count), ''])
+                for order_id in tree[price]:
+                    if not isinstance(tree[price][order_id], LimitTreeWidgetItem):
+                        alpha = min(255, int(20.0 * math.sqrt(float(tree[price][order_id]['size']))) + 20)
+                        new_item = QTreeWidgetItem(parent_price['parent'],
+                                                   ['',
+                                                    tree[price][order_id]['size'],
+                                                    tree[price][order_id]['value'],
+                                                    '',
+                                                    tree[price][order_id]['order_id']])
+                        for column in range(0, 6):
+                            new_item.setBackgroundColor(column, QColor(red, green, 0, alpha))
+                alpha = min(255, int(20.0 * math.sqrt(float(size))) + 20)
+                for column in range(0, 6):
+                    tree[price]['parent'].setBackgroundColor(column, QColor(red, green, 0, alpha))
 
         def get_recent_matches(self):
             request = QNetworkRequest()

@@ -5,11 +5,11 @@ An unofficial Python GUI for Coinbase Exchange.
 The immediate goal is to reproduce the main Exchange window:
 
 - [x] Trade History table
-- [ ] Fills table
-- [ ] Open Orders table
+- [X] Fills table
+- [X] Open Orders table
 - [ ] Price chart
 - [ ] Order Book chart
-- [ ] Order Book table
+- [X] Order Book table
 - [ ] Available Balance table
 - [ ] Order entry
 - [ ] Top info ribbon

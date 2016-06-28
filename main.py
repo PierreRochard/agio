@@ -30,12 +30,12 @@ main_app = QtGui.QApplication(sys.argv)
 
 
 class LimitTreeWidgetItem(QTreeWidgetItem):
-    def __init__(self, parent=None, columns=[]):
+    def __init__(self, parent=None, columns=()):
         QtGui.QTreeWidgetItem.__init__(self, parent, columns)
 
-    def __lt__(self, otherItem):
+    def __lt__(self, other_item):
         column = self.treeWidget().sortColumn()
-        return float(self.text(column)) < float(otherItem.text(column))
+        return float(self.text(column)) < float(other_item.text(column))
 
 
 with warnings.catch_warnings(record=True):
@@ -55,12 +55,11 @@ with warnings.catch_warnings(record=True):
             self.get_recent_matches()
             self.get_fills()
 
-            self.ui.bid_tree.setColumnCount(2)
-            self.ui.bid_tree.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
-            self.ui.bid_tree.setItemsExpandable(True)
-            self.ui.ask_tree.setColumnCount(2)
-            self.ui.ask_tree.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
-            self.ui.ask_tree.setItemsExpandable(True)
+            for tree_ui in (self.ui.bid_tree, self.ui.ask_tree):
+                tree_ui.setColumnCount(2)
+                tree_ui.setHeaderLabels(['Price', 'Size', 'Value', 'Count', 'Order'])
+                tree_ui.setItemsExpandable(True)
+
             self.bid_tree = {}
             self.ask_tree = {}
             self.get_open_orders()
@@ -69,34 +68,31 @@ with warnings.catch_warnings(record=True):
             self.ui.refresh_open_orders.clicked.connect(self.get_open_orders)
             # self.ui.canvas = MainCanvas(self.ui.canvas, self)
             self.timer = QTimer()
-            self.connect(self.timer, SIGNAL("timeout()"), self.refresh_order_book)
+            self.connect(self.timer, SIGNAL("timeout()"), self.refresh_order_book_ui)
             self.timer.start(200)
 
-        def refresh_order_book(self):
-            bid_prices = sorted(self.order_book.bids.price_map.keys(), reverse=True)[:50]
-            self.ui.bid_tree.setSortingEnabled(False)
-            self.ui.bid_tree.clear()
+        def refresh_order_book_ui(self):
             self.bid_tree = {}
-            for bid_price in bid_prices:
-                for order in self.order_book.bids.price_map[bid_price]:
-                    self.add_limit_order(order, 'bid')
-            self.ui.bid_tree.setSortingEnabled(True)
-            self.ui.bid_tree.sortItems(0, Qt.DescendingOrder)
-
-            ask_prices = sorted(self.order_book.asks.price_map.keys())[:50]
-            self.ui.ask_tree.setSortingEnabled(False)
-            self.ui.ask_tree.clear()
             self.ask_tree = {}
-            for ask_price in ask_prices:
-                for order in self.order_book.asks.price_map[ask_price]:
-                    self.add_limit_order(order, 'ask')
-            self.ui.ask_tree.setSortingEnabled(True)
-            self.ui.ask_tree.sortItems(0, Qt.DescendingOrder)
+
+            for side, price_map, tree_ui, reversal in (('bid', self.order_book.bids.price_map, self.ui.bid_tree, True),
+                                                       ('ask', self.order_book.asks.price_map, self.ui.ask_tree, False)):
+                prices = sorted(price_map.keys(), reverse=reversal)[:50]
+                tree_ui.setSortingEnabled(False)
+                tree_ui.clear()
+                for price in prices:
+                    for order in price_map[price]:
+                        self.add_limit_order(order, side)
+                tree_ui.setSortingEnabled(True)
+                tree_ui.sortItems(0, Qt.DescendingOrder)
+
             self.ui.ask_tree.verticalScrollBar().setValue(self.ui.ask_tree.verticalScrollBar().maximum())
 
-            self.ui.spread_label.setText('Spread: {0:,.2f}'.format(self.order_book.asks.price_tree.min_key() -
-                                                                   self.order_book.bids.price_tree.max_key()))
-
+            try:
+                self.ui.spread_label.setText('Spread: {0:,.2f}'.format(self.order_book.asks.price_tree.min_key() -
+                                                                       self.order_book.bids.price_tree.max_key()))
+            except ValueError:
+                self.ui.spread_label.setText('Spread: -')
 
         def get_order_book(self):
             request = QNetworkRequest()
@@ -132,10 +128,12 @@ with warnings.catch_warnings(record=True):
                 ui_tree = self.ui.ask_tree
                 red = 255
                 green = 0
+            if limit_order['price'] > 1000:
+                return False
+            price = '{0:,.2f}'.format(limit_order['price'])
+            size = '{0:,.6f}'.format(limit_order['size'])
+            value = '{0:,.2f}'.format(limit_order['size'] * limit_order['price'])
 
-            price = '{0:,.2f}'.format(float(limit_order['price']))
-            size = str(limit_order['size'])
-            value = '{0:,.2f}'.format((round(Decimal(size) * Decimal(price), 2)))
             order_id = limit_order['order_id']
             parent_price = tree.get(price)
 
@@ -317,29 +315,16 @@ with warnings.catch_warnings(record=True):
             header.setResizeMode(QHeaderView.ResizeToContents)
 
         def start_websocket(self):
-            thread = ListenWebsocket()
-            self.connect(thread, thread.match_signal, self.add_match)
-            self.connect(thread, thread.message_signal, self.process_message)
-            self.connect(thread, thread.sequence_signal, self.update_sequence)
-            self.connect(thread, thread.restart_signal, self.start_websocket)
-            thread.start()
+            websocket_thread = ListenWebsocket()
+            self.connect(websocket_thread, websocket_thread.match_signal, self.add_match)
+            self.connect(websocket_thread, websocket_thread.message_signal, self.process_message)
+            self.connect(websocket_thread, websocket_thread.sequence_signal, self.update_sequence)
+            self.connect(websocket_thread, websocket_thread.restart_signal, self.start_websocket)
+            websocket_thread.start()
 
         def update_sequence(self, sequence):
             self.ui.sequence_label.setText('Sequence: {0}'.format(sequence))
 
-
-# @asyncio.coroutine
-# def master(main_window):
-#     main_window.websocket = True
-#     coinbase_websocket = yield from websockets.connect("wss://ws-feed.exchange.coinbase.com")
-#     yield from coinbase_websocket.send('{"type": "subscribe", "product_id": "BTC-USD"}')
-#     while main_window.websocket:
-#         message = yield from coinbase_websocket.recv()
-#         message = json.loads(message)
-#         main_window.ui.sequence_label.setText('Sequence: {0}'.format(message['sequence']))
-#         if message['type'] == 'match':
-#             main_window.ui.canvas.match_prices += [float(message['price'])]
-#             main_window.ui.canvas.match_dates += [datetime.strptime(message['time'], '%Y-%m-%dT%H:%M:%S.%fZ')]
 
 class ListenWebsocket(QThread):
     def __init__(self):
